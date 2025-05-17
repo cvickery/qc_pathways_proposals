@@ -120,13 +120,19 @@ print(f"""
         border-radius: 0.25em;
       }}
       #prompts-intro {{
-        background-color: #eee;
+        font-size: 0.9em;
+        font-style: italic;
         margin: 1em auto;
         border: 1px solid black;
         border-radius: 0.25em;
         padding: 0.5em;
-        max-width: 35em;
+        max-width: 80%;
       }}
+      /* Requires licensed version of PrinceXML
+      #required-core-annotation::after {{
+        prince-pdf-annotate: text("Students must satisfy all four of these requirement areas")
+      }}
+      */
     </style>
   </head>
   <body>
@@ -157,7 +163,8 @@ print(f"""
       </p>
     </section>
 """)
-print('<h2>Required Core Criteria</h2>')
+print('<h2 id="required-core-annotation">Required Core '
+      'Criteria</h2>')
 for key, criterion in rc_criteria.items():
   print(f'<h3 id="criteria-{key}">{key}: {proposal_types[key]}</h3>')
   for k, v in criterion.items():
@@ -233,15 +240,18 @@ for proposal_type in required_core + flexible_core + college_option:
         f'Proposals</h1>')
   print(f'<p><a href="#criteria-{proposal_type}">{proposal_type} Criteria Definitions</a></p>')
   courses = sorted(by_type[proposal_type])
-  print('<div>' +
-        ' ● '.join([f'<a href="#{proposal_type+course.replace(' ', '')}">{course}</a>'
-                    for course in courses]) +
-        '</div>')
-  for course in courses:
-    proposal = by_type[proposal_type][course]
-    print(f'<h3 id="{proposal_type+course.replace(' ', '')}">{course} '
-          f'({proposal['effective_date']})</h3>')
-    for abbr, full_text in proposal['justifications'].items():
-      print(f'<p><strong>{abbr}:</strong> {full_text}</p>')
+  if len(courses) < 1:
+    print('<h3>No Approved Proposals</h3>')
+  else:
+    print('<div>' +
+          ' ● '.join([f'<a href="#{proposal_type+course.replace(' ', '')}">{course}</a>'
+                      for course in courses]) +
+          '</div>')
+    for course in courses:
+      proposal = by_type[proposal_type][course]
+      print(f'<h3 id="{proposal_type+course.replace(' ', '')}">{course} '
+            f'({proposal['effective_date']})</h3>')
+      for abbr, full_text in proposal['justifications'].items():
+        print(f'<p><strong>{abbr}:</strong> {full_text}</p>')
 
 print('</body></html>')
