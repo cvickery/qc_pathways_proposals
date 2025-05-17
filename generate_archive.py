@@ -128,7 +128,7 @@ print(f"""
         padding: 0.5em;
         max-width: 80%;
       }}
-      /* Requires licensed version of PrinceXML
+      /* PDF annotation support requires a licensed version of PrinceXML.
       #required-core-annotation::after {{
         prince-pdf-annotate: text("Students must satisfy all four of these requirement areas")
       }}
