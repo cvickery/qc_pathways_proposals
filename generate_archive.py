@@ -8,9 +8,37 @@ import psycopg
 from collections import defaultdict
 from psycopg.rows import dict_row
 
+# Current CUNYfirst course information
+with psycopg.connect('dbname=cuny_curriculum') as conn:
+  with conn.cursor(row_factory=dict_row) as cursor:
+    cursor.execute("""
+    select discipline||' '||catalog_number as course,
+           title, course_status = 'A' as is_active,
+           designation,
+           attributes ~* 'WRIC' as is_wric,
+           attributes ~* 'QNSLIT' as is_lit,
+           attributes ~* 'QNSLANG' as is_lang,
+           attributes ~* 'QNSSCI' as is_sci,
+           attributes ~* 'QNSSYN' as is_syn
+      from cuny_courses
+     where institution ~* 'qns'
+    """)
+    rows = cursor.fetchall()
+
+courses_cache = {row['course']: {'title': row['title'],
+                                 'designation': row['designation'],
+                                 'is_active': row['is_active'],
+                                 'is_wric': row['is_wric'],
+                                 'is_lit': row['is_lit'],
+                                 'is_lang': row['is_lang'],
+                                 'is_sci': row['is_sci'],
+                                 'is_syn': row['is_syn']}
+                 for row in rows}
+
 conn = psycopg.connect('dbname=curric')
 cursor = conn.cursor(row_factory=dict_row)
 
+# Generate range of effective dates covered.
 cursor.execute("""
 select min("effective date"), max("effective date")
   from events_view
@@ -24,7 +52,7 @@ dates = cursor.fetchone()
 earliest = dates['min'].strftime('%B, %Y')
 latest = dates['max'].strftime('%B, %Y')
 
-# Proposal Types
+# Proposal categories and their criteria
 required_core = ['EC-1', 'EC-2', 'MQR', 'LPS']
 flexible_core = ['USED', 'WCGI', 'CE', 'IS', 'SW']
 college_option = ['LIT', 'LANG', 'SCI', 'SYN']
@@ -91,6 +119,7 @@ for abbr, full_text in all_criteria.items():
     case _:
       pass
 
+# Table of Contents
 toc = '<h2><a href="#criteria-prompts">Criteria Prompts</a></h2>'
 # Required Core
 toc += '<h2>Required Core Proposals</h2>\n'
@@ -103,15 +132,21 @@ toc += '<h2>College Option Proposals</h2>\n'
 for abbr in co_criteria:
   toc += f'<div><a href="#{abbr}">{proposal_types[abbr]}</a></div>\n'
 
+# Document Framework
 print(f"""
 <html>
   <head>
     <style>
-      h1 {{
+      section {{
         break-before: page;
       }}
       .document-title {{
         text-align: center;
+      }}
+      #byline {{
+        text-align: right;
+        font-style: italic;
+        font-size: 0.9em;
       }}
       #contents > div {{
         margin-left: 1em;
@@ -123,12 +158,18 @@ print(f"""
         font-size: 0.9em;
         font-style: italic;
         margin: 1em auto;
-        border: 1px solid black;
-        border-radius: 0.25em;
-        padding: 0.5em;
-        max-width: 80%;
       }}
-      /* PDF annotation support requires a licensed version of PrinceXML.
+      #prompts-intro h1 {{
+        font-style: normal;
+      }}
+      .inactive, .not-found {{
+        color: red;
+      }}
+      /* PDF annotation support would require a paid-license version of PrinceXML. This is a model
+       * of how that could be set up for a possible future extension of this project. Hovering over
+       * a prompt‘s abbreviation could bring up a PDF annotation (tooltip) with the text of the
+       * prompt instead of requiring the user to follow links back and forth between the prompt
+       * definitions and the justificaion paragraphs.
       #required-core-annotation::after {{
         prince-pdf-annotate: text("Students must satisfy all four of these requirement areas")
       }}
@@ -136,8 +177,56 @@ print(f"""
     </style>
   </head>
   <body>
+
     <h1 class="document-title">QC Approved Pathways Proposals</h1>
     <h2 class="document-title">{earliest} through {latest}</h2>
+
+    <!-- Introduction -->
+    <p>
+      This is an archive of proposals for Pathways Common Core (Required Core and Flexible Core)
+      courses that were approved by the Queens College Academic Senate and the CUNY Common Core
+      Review Committee (CCRC). The Senate’s Undergraduate Curriculum Committee assigned the task of
+      collecting and reviewing these proposals to the <em>ad hoc</em> General Education Advisory
+      Committee (GEAC). The chair of GEAC, Christopher Vickery, developed a database and website
+      for managing proposal submissions, peer review, and subsequent public record. The College has
+      stopped hosting the website, but a copy of the underlying database has been preserved, and
+      was used to generate this archive of the successful propoposals.
+    </p>
+
+    <p>
+      CCRC proposals must be accompanied by a highly-structured sample syllabus for the course.
+      Those syllabi are not included in this archive.
+    </p>
+
+    <p>
+      College Option requirements are not subject to CCRC review, and need only be approved by the
+      Academic Senate. Those proposals are included in this archive as well.
+    </p>
+
+    <p>
+      For this archive, each course was examined in the <em>current</em> CUNYfirst course catalog.
+      Courses that are currently missing or inactive are noted. Otherwise, each course’s current
+      title is given, followed by a series of course properties in square brackets. Within the
+      square brackets, the first property is the <em>designation</em>, which will normally match the
+      proposal type. Following the designation, WI means the course is writing intensive, while LIT,
+      LANG, SCI, and SYN indicate the four college option categories.
+    </p>
+
+    <p>
+      <strong>Implementation Note:</strong> The archive used a preserved copy of the database to
+      build a static web page using Python code. That code is
+      <a href="https://github.com/cvickery/qc_pathways_proposals">publicly available on GitHub</a>.
+      That web page was then converted to PDF using the <a href="https://princexml.com">Prince</a>
+      conversion tool. (That’s the Prince logo in the upper right corner of this page). A dump of
+      the Postgres database is available from the author.
+      )
+    </p>
+
+    <p id="byline">
+      Christopher Vickery<br/>
+      May, 2025
+    </p>
+
     <section id="contents">
     <h2>Contents</h2>
     <div>{toc}</div>
@@ -248,9 +337,26 @@ for proposal_type in required_core + flexible_core + college_option:
                       for course in courses]) +
           '</div>')
     for course in courses:
+      try:
+        course_info = courses_cache[course.rstrip('WH')]
+        if course_info['is_active']:
+          designation = course_info['designation']
+          if designation[0] in ['R', 'F'] and designation[-1] == 'R':
+            designation = designation[1:3]
+          info_str = f'{course_info['title']} [{designation}'
+          info_str += ' WRIC' if course_info['is_wric'] else ''
+          info_str += ' LIT' if course_info['is_lit'] else ''
+          info_str += ' LANG' if course_info['is_lang'] else ''
+          info_str += ' SCI' if course_info['is_sci'] else ''
+          info_str += ' SYN' if course_info['is_syn'] else ''
+          info_str += ']'
+        else:
+          info_str = '<span class="inactive">Currently Inactive</span>'
+      except KeyError:
+        info_str = '<span class="not-found">Not Found</span>'
       proposal = by_type[proposal_type][course]
-      print(f'<h3 id="{proposal_type+course.replace(' ', '')}">{course} '
-            f'({proposal['effective_date']})</h3>')
+      print(f'<h3 id="{proposal_type+course.replace(' ', '')}">{course} {info_str}</h3>'
+            f'<h4>Approved {proposal['effective_date']}</h4>')
       for abbr, full_text in proposal['justifications'].items():
         print(f'<p><strong>{abbr}:</strong> {full_text}</p>')
 
