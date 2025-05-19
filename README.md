@@ -41,7 +41,6 @@ Uses <a href="https://princexml.com">Prince 16</a> to convert the HTML to PDF.
   That web page was then converted to PDF using the <a href="https://princexml.com">Prince</a>
   conversion tool. (That’s the Prince logo in the upper right corner of this page). A dump of
   the Postgres database is available from the author.
-  )
 </p>
 
 <p id="byline">
